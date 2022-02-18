@@ -1,0 +1,22 @@
+shop: Связной
+categories:
+  - id: 224
+    name: Смартфоны
+  - id: 15
+    name: Аксессуары
+  - id: 1
+    name: Flash-накопители
+
+goods:
+  - id: 4216678
+    category: 224
+    model: Samsung/galaxy S8
+    name: Самунг Гэлекси
+    price: 50000
+    price_rrc: 55000
+    quantity: 50
+    parameters:
+      "Диагональ (дюйм)": 6.5
+      "Разрешение (пикс)": 2688x1242
+      "Встроенная память (Гб)": 512
+      "Цвет": золотистый

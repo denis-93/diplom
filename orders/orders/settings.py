@@ -144,7 +144,12 @@ REST_FRAMEWORK = {
 # Email
 EMAIL_HOST = 'smtp.mail.ru'
 EMAIL_PORT = 2525
-EMAIL_HOST_USER = "magazin@mail.ru"
-EMAIL_HOST_PASSWORD = "password"
+EMAIL_HOST_USER = ''
+EMAIL_HOST_PASSWORD = ''
 EMAIL_USE_TLS = True
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+# Celery
+BROKER_URL = 'redis://localhost:6379'
+ACCEPT_CONTENT = ['application/json']
+TASK_SERIALIZER = 'json'

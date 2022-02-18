@@ -2,12 +2,12 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 from django.http import JsonResponse
-from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from rest_framework.viewsets import ModelViewSet
 from yaml import safe_load
-from .services import send_email
+from .tasks import send_email
 from .models import Shop, Category, ProductInfo, Product, Parameter, ProductParameter, Order, OrderItem, Contact
 from .serializers import (
     UserSerializer,
@@ -20,9 +20,11 @@ from .serializers import (
 )
 
 
-class PartnerUpdate(APIView):  # Загрузка данных из файла
+class PartnerViewSet(ModelViewSet):
 
-    def post(self, request, *args, **kwargs):
+    http_method_names = ['get', 'post']
+
+    def create(self, request, *args, **kwargs):  # Загрузка данных из файла
         if not request.user.is_authenticated:
             print(request.user, request.auth, request.headers)
             return JsonResponse({'Status': False, 'Error': 'Log in required'}, status=403)
@@ -56,6 +58,17 @@ class PartnerUpdate(APIView):  # Загрузка данных из файла
                     )
             return JsonResponse({'Status': True})
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
+
+    def list(self, request, *args, **kwargs):  # Отображение заказов для поставщика
+        if not request.user.is_authenticated:
+            return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
+        if request.user.type != 'shop':
+            return JsonResponse({'Status': False, 'Error': 'Только для магазинов'}, status=403)
+        order = Order.objects.filter(
+            ordered_items__product_info__shop__user_id=request.user.id).exclude(state='basket').prefetch_related(
+            'ordered_items__product_info__product__category').distinct()
+        serializer = OrderSerializer(order, many=True)
+        return Response(serializer.data)
 
 
 class LoginAccount(APIView):
@@ -99,10 +112,11 @@ class RegisterAccount(APIView):  # Для регистрации покупат�
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 
-class ProductInfoView(ListAPIView):  # Список продуктов
+class ProductInfoViewSet(ModelViewSet):  # Список продуктов
 
     serializer_class = ProductInfoSerializer
     search_fields = ['product__name', 'model']
+    http_method_names = ['get']
 
     def get_queryset(self):
         query = Q(shop__state=True)
@@ -117,10 +131,13 @@ class ProductInfoView(ListAPIView):  # Список продуктов
         return queryset
 
 
-class BasketView(APIView):  # Работа с корзиной для покупателя
+class BasketViewSet(ModelViewSet):  # Работа с корзиной для покупателя
+
+    serializer_class = OrderSerializer
+    http_method_names = ['get', 'post', 'put', 'delete']
 
     # отобразить корзину
-    def get(self, request, *args, **kwargs):
+    def list(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         basket = Order.objects.filter(
@@ -131,7 +148,7 @@ class BasketView(APIView):  # Работа с корзиной для покуп
         return Response(serializer.data)
 
     # добавить позицию в корзину
-    def post(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         items = request.data.get('ordered_items')
@@ -154,7 +171,7 @@ class BasketView(APIView):  # Работа с корзиной для покуп
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
     # удалить позиции из корзины
-    def delete(self, request, *args, **kwargs):
+    def destroy(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         items = request.data.get('ordered_items')
@@ -168,7 +185,7 @@ class BasketView(APIView):  # Работа с корзиной для покуп
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
     # редактировать позиции в корзине
-    def put(self, request, *args, **kwargs):
+    def update(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         items = request.data.get('ordered_items')
@@ -182,10 +199,13 @@ class BasketView(APIView):  # Работа с корзиной для покуп
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 
-class ContactView(APIView):  # Работа с контактами
+class ContactViewSet(ModelViewSet):  # Работа с контактами
+
+    serializer_class = ContactSerializer
+    http_method_names = ['get', 'post', 'put', 'delete']
 
     # получить все контакты
-    def get(self, request, *args, **kwargs):
+    def list(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         contact = Contact.objects.filter(user_id=request.user.id)
@@ -193,10 +213,11 @@ class ContactView(APIView):  # Работа с контактами
         return Response(serializer.data)
 
     # добавить контакт
-    def post(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         if {'city', 'street', 'house', 'phone'}.issubset(request.data):
+            request.data._mutable = True
             request.data.update({'user': request.user.id})
             serializer = ContactSerializer(data=request.data)
             if serializer.is_valid():
@@ -207,7 +228,7 @@ class ContactView(APIView):  # Работа с контактами
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
     # редактировать контакт
-    def put(self, request, *args, **kwargs):
+    def update(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         if 'id' in request.data:
@@ -224,7 +245,7 @@ class ContactView(APIView):  # Работа с контактами
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
     # удалить контакт
-    def delete(self, request, *args, **kwargs):
+    def destroy(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         contact_id = request.data.get('id')
@@ -235,10 +256,13 @@ class ContactView(APIView):  # Работа с контактами
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 
-class OrderView(APIView):  # Заказы покупателя
+class OrderViewSet(ModelViewSet):  # Заказы покупателя
+
+    serializer_class = OrderSerializer
+    http_method_names = ['get', 'post']
 
     # получить мои заказы
-    def get(self, request, *args, **kwargs):
+    def list(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         order = Order.objects.filter(
@@ -249,7 +273,7 @@ class OrderView(APIView):  # Заказы покупателя
         return Response(serializer.data)
 
     # сделать новый заказ из корзины
-    def post(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
         if {'id', 'contact'}.issubset(request.data):
@@ -263,29 +287,17 @@ class OrderView(APIView):  # Заказы покупателя
         return JsonResponse({'Status': False, 'Errors': 'Не указаны все необходимые аргументы'})
 
 
-class PartnerOrdersView(APIView):  # Отображение заказов для поставщика
-
-    def get(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return JsonResponse({'Status': False, 'Error': 'Только для зарегистрированных пользователей'}, status=403)
-        if request.user.type != 'shop':
-            return JsonResponse({'Status': False, 'Error': 'Только для магазинов'}, status=403)
-        order = Order.objects.filter(
-            ordered_items__product_info__shop__user_id=request.user.id).exclude(state='basket').prefetch_related(
-            'ordered_items__product_info__product__category').distinct()
-        serializer = OrderSerializer(order, many=True)
-        return Response(serializer.data)
-
-
-class CategoryView(ListAPIView):  # Просмотр категорий
+class CategoryViewSet(ModelViewSet):  # Просмотр категорий
 
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     search_fields = ["name"]
+    http_method_names = ['get']
 
 
-class ShopView(ListAPIView):  # Просмотр магазинов, принимающих заказы
+class ShopViewSet(ModelViewSet):
 
-    queryset = Shop.objects.filter(state=True)
     serializer_class = ShopSerializer
+    queryset = Shop.objects.filter(state=True)
+    http_method_names = ['get']
     search_fields = ['name']

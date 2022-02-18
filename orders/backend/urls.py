@@ -1,28 +1,29 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
-    PartnerUpdate,
+    PartnerViewSet,
     LoginAccount,
     RegisterAccount,
-    ProductInfoView,
-    BasketView,
-    ContactView,
-    OrderView,
-    PartnerOrdersView,
-    CategoryView,
-    ShopView
+    ProductInfoViewSet,
+    BasketViewSet,
+    ContactViewSet,
+    OrderViewSet,
+    CategoryViewSet,
+    ShopViewSet
 )
 
 app_name = 'backend'
+router = DefaultRouter()
+router.register(r'shops', ShopViewSet, basename='Shop')
+router.register(r'categories', CategoryViewSet, basename='Category')
+router.register(r'products', ProductInfoViewSet, basename='ProductInfo')
+router.register(r'user/orders', OrderViewSet, basename='Order')
+router.register(r'user/contacts', ContactViewSet, basename='Contact')
+router.register(r'user/basket', BasketViewSet, basename='Bascet')
+router.register(r'partners', PartnerViewSet, basename='Partner')
 
 urlpatterns = [
-    path('partner/update', PartnerUpdate.as_view(), name='partner-update'),
-    path('partner/orders', PartnerOrdersView.as_view(), name='partner-orders'),
     path('user/login', LoginAccount.as_view(), name='user-login'),
     path('user/register', RegisterAccount.as_view(), name='user-register'),
-    path('user/basket', BasketView.as_view(), name='user-basket'),
-    path('user/contact', ContactView.as_view(), name='user-contact'),
-    path('user/orders', OrderView.as_view(), name='user-orders'),
-    path('product', ProductInfoView.as_view(), name='product-info'),
-    path('category', CategoryView.as_view(), name='category'),
-    path('shop', ShopView.as_view(), name='shop')
+    path('', include(router.urls))
 ]
