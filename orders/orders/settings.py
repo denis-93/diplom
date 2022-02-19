@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'backend',
     'rest_framework',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -138,7 +139,8 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'rest_framework.filters.SearchFilter',
         'django_filters.rest_framework.DjangoFilterBackend',
-    ]
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema'
 }
 
 # Email
@@ -153,3 +155,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 BROKER_URL = 'redis://localhost:6379'
 ACCEPT_CONTENT = ['application/json']
 TASK_SERIALIZER = 'json'
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Backend API',
+    'DESCRIPTION': 'Documentation for Backend API',
+    'VERSION': '1.0.0',
+}
